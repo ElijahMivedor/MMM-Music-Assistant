@@ -1,11 +1,12 @@
 /* MMM-MusicAssistant.js — MagicMirror² module (front-end).
-   Adapted from CFenner's MMM-Sonos. Shows the current track + album art for one
-   or more Music Assistant players ("rooms"). All server talk lives in
-   node_helper.js; this file just polls on an interval, holds the room list,
-   and feeds the template.
+   Adapted from CFenner's MMM-Sonos. Shows the current artist, track, and album
+   cover for one or more Music Assistant players. All server talk lives in
+   node_helper.js; this file polls on an interval, holds the room list, and
+   renders it directly in getDom() (no nunjucks — works on old MagicMirror).
    Notes:
-   06/23/2026 - Forked from MMM-Sonos; retargeted from node-sonos-http-api to the
-                Music Assistant WebSocket API. Token + rooms hard-coded below. */
+   06/23/2026 - Forked from MMM-Sonos; retargeted to the Music Assistant HTTP API.
+   06/23/2026 - getDom() build (old MM has no .njk support). Token + room hard-coded.
+   06/23/2026 - Final: 15s polling; show only artist/track/cover (no room name, no debug). */
 
 Module.register("MMM-MusicAssistant", {
     defaults: {
@@ -15,18 +16,14 @@ Module.register("MMM-MusicAssistant", {
         //Long-lived token named "Magic Mirror" (valid to 2036). LAN-only secret.
         token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyYVlMcklQOGoybHlqTUVqVEIxcnpyNTZWcEdTaExkRTUxVVdxb1pmT3BzIiwianRpIjoiSy1rR3hMbmU3enlLZ1J5aXIzOUNWWmh3bWgtOTlqSmJTY3B6d0NaNEdNWSIsImlhdCI6MTc4MjIzNzQ3MywiZXhwIjoyMDk3NTk3NDczLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwidG9rZW5fbmFtZSI6Ik1hZ2ljIE1pcnJvciIsImlzX2xvbmdfbGl2ZWQiOnRydWV9.ursmaYvP8sa4bfT3whUZKBSVaBYx3IVh9l5_5N_qX_E",
         //Which players to display. Empty array = every player that has something loaded.
-        //Add/remove ids freely — these come straight from `players/all`.
-        players: [
-            "media_player.up_out_pool_20"
-        ],
+        players: ["media_player.up_out_pool_20"],
 
-        //--- Display options (carried over from MMM-Sonos) ---
-        showStoppedRoom: false,
+        //--- Display options ---
+        showStoppedRoom: true,     //show the tile even when paused/stopped
         showAlbumArt: true,
-        albumArtLocation: "right",
-        showRoomName: true,
+        albumArtLocation: "right", //"left" or "right"
         animationSpeed: 1000,
-        updateInterval: 30 //seconds between polls
+        updateInterval: 15         //seconds between polls
     },
 
     roomList: [],
@@ -51,47 +48,89 @@ Module.register("MMM-MusicAssistant", {
         });
     },
 
-    //Store the new list and only repaint when it actually changed
+    //Store the new list; repaint on first load and whenever it changed
     updateRoomList: function (roomList)
     {
+        var changed = !this.loaded || JSON.stringify(this.roomList) !== JSON.stringify(roomList);
         this.loaded = true;
-        if (JSON.stringify(this.roomList) === JSON.stringify(roomList))
-        {
-            return;
-        }
         this.roomList = roomList;
-        this.updateDom(this.config.animationSpeed);
+        if (changed)
+        {
+            this.updateDom(this.config.animationSpeed);
+        }
     },
 
     getStyles: function ()
     {
-        return [`${this.name}.css`];
+        return [this.name + ".css"];
     },
 
-    getTemplate: function ()
+    //Build the DOM by hand — no template, so it renders on every MM version
+    getDom: function ()
     {
-        return `${this.name}.njk`;
-    },
+        var wrapper = document.createElement("div");
+        wrapper.className = "mmm-ma";
 
-    getTemplateData: function ()
-    {
-        return {
-            flip: this.data.position.startsWith("left"),
-            loaded: this.loaded,
-            showAlbumArtRight: this.config.showAlbumArt && this.config.albumArtLocation !== "left",
-            showAlbumArtLeft: this.config.showAlbumArt && this.config.albumArtLocation === "left",
-            showRoomName: this.config.showRoomName,
-            showStoppedRoom: this.config.showStoppedRoom,
-            roomList: this.roomList,
-            labelLoading: this.translate("LOADING")
-        };
+        //Still waiting for the first data push from the helper
+        if (!this.loaded)
+        {
+            var loading = document.createElement("div");
+            loading.className = "dimmed light small";
+            loading.innerHTML = this.translate("LOADING");
+            wrapper.appendChild(loading);
+            return wrapper;
+        }
+
+        var self = this;
+        var showArtLeft = this.config.showAlbumArt && this.config.albumArtLocation === "left";
+        var showArtRight = this.config.showAlbumArt && this.config.albumArtLocation !== "left";
+
+        var ul = document.createElement("ul");
+
+        //One <li> per room: album cover + artist/track (no room name)
+        this.roomList.forEach(function (room)
+        {
+            if (room.state !== "PLAYING" && !self.config.showStoppedRoom) { return; }
+
+            var li = document.createElement("li");
+            var row = document.createElement("div");
+
+            function makeArt()
+            {
+                var art = document.createElement("div");
+                art.className = "art";
+                var img = document.createElement("img");
+                img.src = room.albumArt;
+                art.appendChild(img);
+                return art;
+            }
+
+            if (showArtLeft && room.albumArt) { row.appendChild(makeArt()); }
+
+            var name = document.createElement("div");
+            name.className = "name normal medium";
+            var artist = document.createElement("div");
+            artist.textContent = room.artist;
+            var track = document.createElement("div");
+            track.textContent = room.track;
+            name.appendChild(artist);
+            name.appendChild(track);
+            row.appendChild(name);
+
+            if (showArtRight && room.albumArt) { row.appendChild(makeArt()); }
+
+            li.appendChild(row);
+            ul.appendChild(li);
+        });
+
+        wrapper.appendChild(ul);
+        return wrapper;
     },
 
     socketNotificationReceived: function (notification, payload)
     {
         if (notification === "MMM_MA_DATA")
         {
-            Log.debug("received MMM_MA_DATA");
             this.updateRoomList(payload);
         }
     }

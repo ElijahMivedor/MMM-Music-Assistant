@@ -39,8 +39,6 @@ module.exports = NodeHelper.create({
     {
         if (notification === "MMM_MA_UPDATE")
         {
-            //DEBUG: confirms the front-end actually reached the helper
-            console.log("MMM-MusicAssistant: poll received -> fetching from " + config.host + ":" + config.port);
             this.fetchNowPlaying(config);
         }
     },
@@ -87,10 +85,7 @@ module.exports = NodeHelper.create({
                     return;
                 }
 
-                //DEBUG: confirms the fetch worked and shows what we're sending back
-                const rooms = self.toRoomList(players, config.players);
-                console.log("MMM-MusicAssistant: got " + players.length + " players, sending " + rooms.length + " room(s) to front-end");
-                self.sendSocketNotification("MMM_MA_DATA", rooms);
+                self.sendSocketNotification("MMM_MA_DATA", self.toRoomList(players, config.players));
             });
         });
 
@@ -111,7 +106,7 @@ module.exports = NodeHelper.create({
         req.end();
     },
 
-    //Map MA player objects into the { name, state, artist, track, albumArt } shape the template renders
+    //Map MA player objects into the { name, state, artist, track, albumArt } shape the front-end renders
     toRoomList: function (players, wantedIds)
     {
         //Empty/missing list means "show every player that has something loaded"
@@ -127,7 +122,7 @@ module.exports = NodeHelper.create({
             const cm = p.current_media;
             if (!cm) { return; }
 
-            //MA reports lowercase states; normalize to the template's PLAYING/STOPPED check
+            //MA reports lowercase states; normalize to the front-end's PLAYING/STOPPED check
             const isPlaying = (p.playback_state || p.state) === "playing";
 
             rooms.push({

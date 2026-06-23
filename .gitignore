@@ -1,0 +1,11 @@
+# Dependencies (module has none, but just in case)
+node_modules/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Local Claude Code / editor config
+.claude/
