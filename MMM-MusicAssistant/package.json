@@ -1,0 +1,16 @@
+{
+  "name": "mmm-musicassistant",
+  "version": "0.1.0",
+  "description": "A MagicMirror² module to display the currently playing track and album art from Music Assistant players.",
+  "main": "MMM-MusicAssistant.js",
+  "keywords": [
+    "magicmirror",
+    "music-assistant",
+    "music"
+  ],
+  "author": "ElijahMivedor",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

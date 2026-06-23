@@ -1,0 +1,22 @@
+.mmm-ma ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+.mmm-ma ul .name,
+.mmm-ma ul .art {
+  display: inline-block;
+  vertical-align: middle;
+}
+.mmm-ma ul .name {
+  padding: 0 0.25em;
+}
+.mmm-ma ul .art img {
+  height: 100px;
+}
+.mmm-ma ul .room {
+  padding: 0.25em 0.5em;
+}
+.mmm-ma ul.flip {
+  direction: rtl;
+}
