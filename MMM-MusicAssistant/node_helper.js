@@ -1,25 +1,32 @@
 /* node_helper.js — back-end adapter for MMM-MusicAssistant.
-   This file holds no UI. Its only job is to talk to the Music Assistant server
-   over its WebSocket API and hand the front-end a clean now-playing list.
+   This file holds no UI. Its only job is to ask the Music Assistant server for
+   the current players and hand the front-end a clean now-playing list.
 
-   Flow on every poll (the front-end ticks every config.updateInterval seconds):
-     1. open a WebSocket to ws://<host>:<port>/ws
-     2. send the `auth` command with the long-lived token (REQUIRED on schema >= 28)
-     3. send `players/all`
-     4. map each player's current_media -> { name, state, artist, track, albumArt }
-     5. send it back as MMM_MA_DATA and close the socket
+   How it talks to MA: a plain HTTP POST to the server's JSON-RPC endpoint.
+     POST http://<host>:<port>/api
+       header: Authorization: Bearer <long-lived-token>
+       body:   {"command":"players/all"}
+     -> responds with the players array directly (HTTP 200).
 
-   We open a short-lived session per poll on purpose: it mirrors the original
-   MMM-Sonos request/response model and needs no reconnect/keepalive logic.
+   Why HTTP and not the WebSocket API: MagicMirror on the Pi runs an OLD Node
+   (pre-7.6) with no async/await and no global WebSocket, and the `ws` package
+   needs Node 10+. The built-in `http` module + callbacks works on any Node, so
+   this has ZERO npm dependencies (no `npm install` needed).
+
+   Flow on every poll (front-end ticks every config.updateInterval seconds):
+     1. POST players/all with the Bearer token
+     2. map each player's current_media -> { name, state, artist, track, albumArt }
+     3. send it back as MMM_MA_DATA
    Notes:
-   06/23/2026 - Forked from MMM-Sonos; replaced the node-sonos-http-api HTTP GET
-                with the Music Assistant WebSocket API (auth + players/all). */
+   06/23/2026 - Forked from MMM-Sonos; first cut used the MA WebSocket API.
+   06/23/2026 - Pi runs Node <7.6 (no async/await, no ws): switched to the
+                built-in `http` module hitting MA's POST /api endpoint instead. */
 
 const NodeHelper = require("node_helper");
-const WebSocket = require("ws");
+const http = require("http");
 
-//Give the whole auth + query round-trip this long before we give up
-const SESSION_TIMEOUT_MS = 8000;
+//Give the request this long before we give up
+const REQUEST_TIMEOUT_MS = 8000;
 
 module.exports = NodeHelper.create({
     start: function ()
@@ -36,85 +43,67 @@ module.exports = NodeHelper.create({
         }
     },
 
-    //Run one full MA session: connect -> auth -> players/all -> transform -> reply
+    //POST players/all to MA, then transform + reply
     fetchNowPlaying: function (config)
     {
         const self = this;
-        const wsUrl = `ws://${config.host}:${config.port}/ws`;
-        const ws = new WebSocket(wsUrl);
+        const body = JSON.stringify({ command: "players/all" });
 
-        //Tracks in-flight commands so we can match each reply to its request
-        const pending = new Map();
-        let nextId = 1;
-
-        //Bail out (and clean up) if the server never finishes the round-trip
-        const timeout = setTimeout(function ()
-        {
-            console.error("MMM-MusicAssistant: timed out talking to " + wsUrl);
-            try { ws.terminate(); } catch (e) { /* already gone */ }
-        }, SESSION_TIMEOUT_MS);
-
-        //Send a command and resolve with its `result`, matched on message_id
-        function send(command, args)
-        {
-            return new Promise(function (resolve, reject)
-            {
-                const messageId = String(nextId++);
-                pending.set(messageId, { resolve: resolve, reject: reject });
-                ws.send(JSON.stringify({ message_id: messageId, command: command, args: args || {} }));
-            });
-        }
-
-        ws.on("message", function (data)
-        {
-            let msg;
-            try { msg = JSON.parse(data.toString()); } catch (e) { return; }
-
-            //Command responses carry the message_id we are waiting on
-            if (msg.message_id && pending.has(msg.message_id))
-            {
-                const handler = pending.get(msg.message_id);
-                pending.delete(msg.message_id);
-                if (msg.error_code || msg.details)
-                {
-                    handler.reject(new Error((msg.error_code || "") + " " + (msg.details || "")));
-                }
-                else
-                {
-                    handler.resolve(msg.result);
-                }
+        const options = {
+            host: config.host,
+            port: config.port,
+            path: "/api",
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Content-Length": Buffer.byteLength(body),
+                //Bearer token auth — required for the players/all command
+                "Authorization": "Bearer " + config.token
             }
-            //The first frame is server_info — nothing to do; we just go straight to auth
-        });
+        };
 
-        ws.on("open", async function ()
+        const req = http.request(options, function (res)
         {
-            try
+            //Collect the whole response body
+            let data = "";
+            res.setEncoding("utf8");
+            res.on("data", function (chunk) { data += chunk; });
+            res.on("end", function ()
             {
-                //Schema >= 28 requires authenticating before any other command
-                await send("auth", { token: config.token });
+                if (res.statusCode !== 200)
+                {
+                    console.error("MMM-MusicAssistant: HTTP " + res.statusCode + " from /api: " + data);
+                    return;
+                }
 
-                //Pull every player, then keep only the ones we were asked for
-                const players = await send("players/all");
-                clearTimeout(timeout);
+                //Body is the players array directly
+                let players;
+                try { players = JSON.parse(data); }
+                catch (e)
+                {
+                    console.error("MMM-MusicAssistant: bad JSON from /api: " + e.message);
+                    return;
+                }
+
                 self.sendSocketNotification("MMM_MA_DATA", self.toRoomList(players, config.players));
-            }
-            catch (err)
-            {
-                clearTimeout(timeout);
-                console.error("MMM-MusicAssistant: " + err.message);
-            }
-            finally
-            {
-                try { ws.close(); } catch (e) { /* already closing */ }
-            }
+            });
         });
 
-        ws.on("error", function (err)
+        //Network-level failure (server down, wrong host, etc.)
+        req.on("error", function (err)
         {
-            clearTimeout(timeout);
-            console.error("MMM-MusicAssistant socket error: " + err.message);
+            console.error("MMM-MusicAssistant request error: " + err.message);
         });
+
+        //Don't let a stalled request pile up across polls
+        req.setTimeout(REQUEST_TIMEOUT_MS, function ()
+        {
+            console.error("MMM-MusicAssistant: timed out talking to " + config.host);
+            req.abort();
+        });
+
+        req.write(body);
+        req.end();
     },
 
     //Map MA player objects into the { name, state, artist, track, albumArt } shape the template renders
