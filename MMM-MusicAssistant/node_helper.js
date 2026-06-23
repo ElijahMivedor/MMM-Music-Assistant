@@ -39,6 +39,8 @@ module.exports = NodeHelper.create({
     {
         if (notification === "MMM_MA_UPDATE")
         {
+            //DEBUG: confirms the front-end actually reached the helper
+            console.log("MMM-MusicAssistant: poll received -> fetching from " + config.host + ":" + config.port);
             this.fetchNowPlaying(config);
         }
     },
@@ -85,7 +87,10 @@ module.exports = NodeHelper.create({
                     return;
                 }
 
-                self.sendSocketNotification("MMM_MA_DATA", self.toRoomList(players, config.players));
+                //DEBUG: confirms the fetch worked and shows what we're sending back
+                const rooms = self.toRoomList(players, config.players);
+                console.log("MMM-MusicAssistant: got " + players.length + " players, sending " + rooms.length + " room(s) to front-end");
+                self.sendSocketNotification("MMM_MA_DATA", rooms);
             });
         });
 

@@ -17,11 +17,6 @@ Module.register("MMM-MusicAssistant", {
         //Which players to display. Empty array = every player that has something loaded.
         //Add/remove ids freely — these come straight from `players/all`.
         players: [
-            "media_player.jay_s_office",
-            "media_player.kitchen",
-            "media_player.conference_room",
-            "media_player.think_tank",
-            "media_player.dining_room",
             "media_player.up_out_pool_20"
         ],
 
