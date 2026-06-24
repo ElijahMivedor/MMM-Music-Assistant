@@ -44,8 +44,8 @@ The defaults are baked into `MMM-MusicAssistant.js`; override any of them in the
 
 | Option | Default | Description |
 |---|---|---|
-| `host` | `"192.168.124.50"` | Music Assistant server IP/host |
-| `port` | `8095` | Music Assistant server port |
+| `host` | `"192.168.195.67"` | Example Music Assistant server IP/host |
+| `port` | `8095` | Example Music Assistant server port |
 | `token` | *(baked in)* | A Music Assistant long-lived token (Settings → create a token) |
 | `players` | `["media_player.up_out_pool_20"]` | Player ids to show. `[]` = every player with something loaded |
 | `showStoppedRoom` | `true` | Show the tile even when paused/stopped |
