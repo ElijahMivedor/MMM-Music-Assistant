@@ -11,12 +11,12 @@
 Module.register("MMM-MusicAssistant", {
     defaults: {
         //--- Music Assistant server (hard-coded for this install) ---
-        host: "192.168.124.50",
-        port: 8095,
+        host: "INSERT IP ADDRESS HERE",
+        port: "INSERT PORT HERE",
         //Long-lived token named "Magic Mirror" (valid to 2036). LAN-only secret.
-        token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyYVlMcklQOGoybHlqTUVqVEIxcnpyNTZWcEdTaExkRTUxVVdxb1pmT3BzIiwianRpIjoiSy1rR3hMbmU3enlLZ1J5aXIzOUNWWmh3bWgtOTlqSmJTY3B6d0NaNEdNWSIsImlhdCI6MTc4MjIzNzQ3MywiZXhwIjoyMDk3NTk3NDczLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwidG9rZW5fbmFtZSI6Ik1hZ2ljIE1pcnJvciIsImlzX2xvbmdfbGl2ZWQiOnRydWV9.ursmaYvP8sa4bfT3whUZKBSVaBYx3IVh9l5_5N_qX_E",
+        token: "INSERT YOUR TOKEN HERE",
         //Which players to display. Empty array = every player that has something loaded.
-        players: ["media_player.up_out_pool_20"],
+        players: ["INSERT NAME OF PLAYER HERE"],
 
         //--- Display options ---
         showStoppedRoom: true,     //show the tile even when paused/stopped
